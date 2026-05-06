@@ -826,8 +826,11 @@ function planReplacePlaceholder(
 
   const styleParts: string[] = [];
   if (width != null) styleParts.push(`width: ${width}`);
+  else if (height != null) styleParts.push(`width: '100%'`);
   if (height != null) styleParts.push(`height: ${height}`);
+  else if (width != null) styleParts.push(`height: '100%'`);
   styleParts.push(`objectFit: 'cover'`);
+  styleParts.push(`objectPosition: '50% 50%'`);
   const replacement =
     `<img src={${identifier}} alt=${jsString(hint)} ` + `style={{ ${styleParts.join(', ')} }} />`;
 

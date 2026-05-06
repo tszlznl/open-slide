@@ -191,6 +191,13 @@ export type Locale = {
     pickerLoading: string;
     pickerEmpty: string;
     placeholderHintLabel: string;
+    crop: string;
+    cropDialogTitle: string;
+    cropDialogDescription: string;
+    cropFitCover: string;
+    cropFitContain: string;
+    cropApply: string;
+    cropResetAria: string;
     noteForAgent: string;
     noteAgentPlaceholder: string;
     noteShortcutHint: string;

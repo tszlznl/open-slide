@@ -607,7 +607,7 @@ describe('applyEdit / replace-placeholder-with-image', () => {
     if (!r.ok) throw new Error(`expected ok, got ${r.error}`);
     expect(r.source).toContain("import hero from './assets/hero.png';");
     expect(r.source).toContain(
-      "<img src={hero} alt='Product hero' style={{ width: 1280, height: 720, objectFit: 'cover' }} />",
+      "<img src={hero} alt='Product hero' style={{ width: 1280, height: 720, objectFit: 'cover', objectPosition: '50% 50%' }} />",
     );
     expect(r.source).not.toContain('<ImagePlaceholder');
   });
@@ -642,9 +642,28 @@ describe('applyEdit / replace-placeholder-with-image', () => {
       { kind: 'replace-placeholder-with-image', assetPath: './assets/logo.svg' },
     ]);
     if (!r.ok) throw new Error(`expected ok, got ${r.error}`);
-    expect(r.source).toContain("<img src={logo} alt='Logo' style={{ objectFit: 'cover' }} />");
+    expect(r.source).toContain(
+      "<img src={logo} alt='Logo' style={{ objectFit: 'cover', objectPosition: '50% 50%' }} />",
+    );
     expect(r.source).not.toMatch(/width:\s/);
     expect(r.source).not.toMatch(/height:\s/);
+  });
+
+  it("fills missing height with '100%' when only width is provided", () => {
+    const src = [
+      "import { ImagePlaceholder } from '@open-slide/core';",
+      'export default [() => (',
+      '<ImagePlaceholder hint="Cover" width={800} />',
+      ')];',
+      '',
+    ].join('\n');
+    const r = applyEdit(src, 3, 0, [
+      { kind: 'replace-placeholder-with-image', assetPath: './assets/cover.png' },
+    ]);
+    if (!r.ok) throw new Error(`expected ok, got ${r.error}`);
+    expect(r.source).toContain(
+      "<img src={cover} alt='Cover' style={{ width: 800, height: '100%', objectFit: 'cover', objectPosition: '50% 50%' }} />",
+    );
   });
 
   it('rejects when the targeted JSX is not an ImagePlaceholder', () => {

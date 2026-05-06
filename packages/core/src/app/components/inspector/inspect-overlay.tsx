@@ -12,7 +12,7 @@ const FRAME_MORPH_MS = 180;
 const LAYOUT_TRACK_MS = PANEL_TRANSITION_MS + FRAME_MORPH_MS;
 
 export function InspectOverlay() {
-  const { active, slideId, selected, setSelected, cancel } = useInspector();
+  const { active, slideId, selected, setSelected, cancel, openCrop } = useInspector();
   const overlayRef = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<Highlight | null>(null);
 
@@ -50,15 +50,30 @@ export function InspectOverlay() {
       setHover({ hit });
     };
 
+    const onDblClick = (e: MouseEvent) => {
+      if (e.target instanceof Element && e.target.closest('[data-inspector-ui]')) return;
+      const el = pickElement(e.clientX, e.clientY);
+      if (!el) return;
+      const hit = findSlideSource(el, slideId, { hostOnly: true });
+      if (!hit) return;
+      if (!(hit.anchor instanceof HTMLImageElement)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setSelected({ line: hit.line, column: hit.column, anchor: hit.anchor });
+      openCrop(hit.anchor);
+    };
+
     window.addEventListener('pointermove', onMove, true);
     window.addEventListener('click', onClick, true);
+    window.addEventListener('dblclick', onDblClick, true);
     window.addEventListener('keydown', onKey, true);
     return () => {
       window.removeEventListener('pointermove', onMove, true);
       window.removeEventListener('click', onClick, true);
+      window.removeEventListener('dblclick', onDblClick, true);
       window.removeEventListener('keydown', onKey, true);
     };
-  }, [active, slideId, setSelected, cancel]);
+  }, [active, slideId, setSelected, cancel, openCrop]);
 
   return (
     <FrameOverlay

@@ -186,6 +186,13 @@ export const ja: Locale = {
     pickerEmpty:
       'このスライドのアセットフォルダにまだ画像がありません。「アセット」タブから追加してください。',
     placeholderHintLabel: 'ヒント:',
+    crop: 'トリミング…',
+    cropDialogTitle: '画像をトリミング',
+    cropDialogDescription: '枠をドラッグして表示する範囲を選択します。',
+    cropFitCover: '塗りつぶす',
+    cropFitContain: '全体表示',
+    cropApply: '適用',
+    cropResetAria: 'トリミングをリセット',
     noteForAgent: 'エージェントへのメモ',
     noteAgentPlaceholder: 'エージェントに依頼する変更を記述…',
     noteShortcutHint: '⌘↵ で送信',

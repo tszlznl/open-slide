@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { type SlideComment, useComments } from '@/lib/inspector/use-comments';
 import { type Edit, type EditOp, type EditResult, useEditor } from '@/lib/inspector/use-editor';
 import { useLocale } from '@/lib/use-locale';
+import { ImageCropDialog } from './image-crop-dialog';
 
 export type SelectedTarget = {
   line: number;
@@ -69,6 +70,7 @@ type InspectorCtx = {
   commitEdits: () => Promise<void>;
   cancelEdits: () => void;
   committing: boolean;
+  openCrop: (anchor: HTMLImageElement) => void;
 };
 
 const Ctx = createContext<InspectorCtx | null>(null);
@@ -90,6 +92,16 @@ export function InspectorProvider({ slideId, children }: { slideId: string; chil
   const instanceCounterRef = useRef(0);
   const [pendingCount, setPendingCount] = useState(0);
   const [committing, setCommitting] = useState(false);
+  const [cropTarget, setCropTarget] = useState<{
+    line: number;
+    column: number;
+    anchor: HTMLImageElement;
+    src: string;
+    targetWidth: number;
+    targetHeight: number;
+    initialFit: 'cover' | 'contain';
+    initialPosition: { x: number; y: number };
+  } | null>(null);
   const t = useLocale();
 
   const ensureInstanceId = useCallback((el: HTMLElement): string => {
@@ -529,6 +541,26 @@ export function InspectorProvider({ slideId, children }: { slideId: string; chil
     setSelected(null);
   }, []);
 
+  const openCrop = useCallback((anchor: HTMLImageElement) => {
+    const loc = anchor.dataset.slideLoc;
+    if (!loc) return;
+    const [lineStr, columnStr] = loc.split(':');
+    const line = Number(lineStr);
+    const column = Number(columnStr);
+    if (!Number.isFinite(line) || !Number.isFinite(column)) return;
+    const cs = window.getComputedStyle(anchor);
+    setCropTarget({
+      line,
+      column,
+      anchor,
+      src: anchor.currentSrc || anchor.src,
+      targetWidth: anchor.offsetWidth || anchor.getBoundingClientRect().width,
+      targetHeight: anchor.offsetHeight || anchor.getBoundingClientRect().height,
+      initialFit: cs.objectFit === 'contain' ? 'contain' : 'cover',
+      initialPosition: parseObjectPosition(cs.objectPosition),
+    });
+  }, []);
+
   const value = useMemo<InspectorCtx>(
     () => ({
       slideId,
@@ -549,6 +581,7 @@ export function InspectorProvider({ slideId, children }: { slideId: string; chil
       commitEdits,
       cancelEdits,
       committing,
+      openCrop,
     }),
     [
       slideId,
@@ -568,10 +601,59 @@ export function InspectorProvider({ slideId, children }: { slideId: string; chil
       commitEdits,
       cancelEdits,
       committing,
+      openCrop,
     ],
   );
 
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+  return (
+    <Ctx.Provider value={value}>
+      {children}
+      {cropTarget && (
+        <ImageCropDialog
+          src={cropTarget.src}
+          targetWidth={cropTarget.targetWidth}
+          targetHeight={cropTarget.targetHeight}
+          initialFit={cropTarget.initialFit}
+          initialPosition={cropTarget.initialPosition}
+          onClose={() => setCropTarget(null)}
+          onApply={(result) => {
+            const { line, column, anchor } = cropTarget;
+            if (anchor.isConnected) {
+              bufferOps(line, column, anchor, [
+                { kind: 'set-style', key: 'objectFit', value: result.fit },
+                {
+                  kind: 'set-style',
+                  key: 'objectPosition',
+                  value: `${round2(result.x)}% ${round2(result.y)}%`,
+                },
+              ]);
+            }
+            setCropTarget(null);
+          }}
+        />
+      )}
+    </Ctx.Provider>
+  );
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+function parseObjectPosition(value: string): { x: number; y: number } {
+  const parts = value.trim().split(/\s+/);
+  const xRaw = parts[0] ?? '50%';
+  const yRaw = parts[1] ?? xRaw;
+  return { x: parsePercent(xRaw, 50), y: parsePercent(yRaw, 50) };
+}
+
+function parsePercent(s: string, fallback: number): number {
+  if (s === 'center') return 50;
+  if (s === 'left' || s === 'top') return 0;
+  if (s === 'right' || s === 'bottom') return 100;
+  const m = s.match(/(-?\d+(?:\.\d+)?)%/);
+  if (m?.[1]) return Number(m[1]);
+  return fallback;
 }
 
 export function InspectToggleButton() {

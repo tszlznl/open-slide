@@ -202,7 +202,12 @@ export function InspectorPanel() {
         <>
           <Separator />
           <Section title={t.inspector.imageSection}>
-            <ImageField slideId={slideId} src={pinSnapshot.imageSrc} apply={apply} />
+            <ImageField
+              slideId={slideId}
+              src={pinSnapshot.imageSrc}
+              anchor={pinSelected.anchor}
+              apply={apply}
+            />
           </Section>
         </>
       )}
@@ -587,14 +592,18 @@ function ColorField({
 function ImageField({
   slideId,
   src,
+  anchor,
   apply,
 }: {
   slideId: string;
   src: string;
+  anchor: HTMLElement;
   apply: (ops: EditOp[]) => void;
 }) {
   const [open, setOpen] = useState(false);
   const t = useLocale();
+  const { openCrop } = useInspector();
+  const isImage = anchor.tagName === 'IMG';
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-3">
@@ -609,16 +618,29 @@ function ImageField({
             }}
           />
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="flex-1"
-          onClick={() => setOpen(true)}
-        >
-          <ImageIcon className="size-3.5" />
-          {t.inspector.replace}
-        </Button>
+        <div className="flex flex-1 gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="flex-1"
+            onClick={() => setOpen(true)}
+          >
+            <ImageIcon className="size-3.5" />
+            {t.inspector.replace}
+          </Button>
+          {isImage && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="flex-1"
+              onClick={() => openCrop(anchor as HTMLImageElement)}
+            >
+              {t.inspector.crop}
+            </Button>
+          )}
+        </div>
       </div>
       {open && (
         <AssetPickerDialog
@@ -626,14 +648,25 @@ function ImageField({
           onClose={() => setOpen(false)}
           onPick={(asset) => {
             setOpen(false);
-            apply([
+            const ops: EditOp[] = [
               {
                 kind: 'set-attr-asset',
                 attr: 'src',
                 assetPath: `./assets/${asset.name}`,
                 previewUrl: asset.url,
               },
-            ]);
+            ];
+            if (isImage) {
+              const cs = window.getComputedStyle(anchor);
+              if (cs.objectFit !== 'cover' && cs.objectFit !== 'contain') {
+                ops.push({ kind: 'set-style', key: 'objectFit', value: 'cover' });
+              }
+              const op = cs.objectPosition.trim();
+              if (!op || op === '0% 0%' || op === 'auto') {
+                ops.push({ kind: 'set-style', key: 'objectPosition', value: '50% 50%' });
+              }
+            }
+            apply(ops);
           }}
         />
       )}
