@@ -335,6 +335,111 @@ export function reorderDefaultExportPagesInSource(source: string, order: number[
   return source.slice(0, arrayStart) + rebuilt + source.slice(arrayEnd);
 }
 
+/**
+ * Remove the element at `index` from `export default [...]`.
+ *
+ * Preserves the source slice of every other element, dropping the separator
+ * immediately following the removed element (or the preceding one when the
+ * removed element is the last). Returns `null` when the default export isn't
+ * an array literal or `index` is out of range.
+ */
+export function removePageFromDefaultExportInSource(source: string, index: number): string | null {
+  const found = findDefaultExportArray(source);
+  if (!found) return null;
+  const { elements, arrayStart, arrayEnd } = found;
+  const n = elements.length;
+  if (!Number.isInteger(index) || index < 0 || index >= n) return null;
+
+  if (n === 1) {
+    return `${source.slice(0, arrayStart)}[]${source.slice(arrayEnd)}`;
+  }
+
+  const prefix = source.slice(arrayStart, elements[0].start);
+  const suffix = source.slice(elements[n - 1].end, arrayEnd);
+  const separators: string[] = [];
+  for (let i = 0; i < n - 1; i++) {
+    separators.push(source.slice(elements[i].end, elements[i + 1].start));
+  }
+  const elementText = elements.map((el) => source.slice(el.start, el.end));
+
+  const keptElements: string[] = [];
+  const keptSeparators: string[] = [];
+  for (let i = 0; i < n; i++) {
+    if (i === index) continue;
+    keptElements.push(elementText[i]);
+  }
+  for (let i = 0; i < n - 1; i++) {
+    // Drop the separator that follows the removed element. When the removed
+    // element is the last one, the separator preceding it (i = index-1) is
+    // the trailing separator and gets dropped instead.
+    if (index === n - 1 ? i === n - 2 : i === index) continue;
+    keptSeparators.push(separators[i]);
+  }
+
+  let rebuilt = prefix + keptElements[0];
+  for (let i = 1; i < keptElements.length; i++) {
+    rebuilt += keptSeparators[i - 1] + keptElements[i];
+  }
+  rebuilt += suffix;
+
+  return source.slice(0, arrayStart) + rebuilt + source.slice(arrayEnd);
+}
+
+function chooseInsertSeparator(prefix: string, existingSeparators: string[]): string {
+  const sample = existingSeparators.find((s) => s.includes(','));
+  if (sample) return sample;
+  if (prefix.includes('\n')) {
+    const m = prefix.match(/\n([ \t]*)$/);
+    const indent = m ? m[1] : '  ';
+    return `,\n${indent}`;
+  }
+  return ', ';
+}
+
+/**
+ * Duplicate the element at `index` in `export default [...]`, inserting the
+ * copy immediately after the original. Reuses an existing inter-element
+ * separator when one is available so the cloned entry matches the surrounding
+ * indentation. Returns `null` when the default export isn't an array literal
+ * or `index` is out of range.
+ */
+export function duplicatePageInDefaultExportInSource(source: string, index: number): string | null {
+  const found = findDefaultExportArray(source);
+  if (!found) return null;
+  const { elements, arrayStart, arrayEnd } = found;
+  const n = elements.length;
+  if (!Number.isInteger(index) || index < 0 || index >= n) return null;
+
+  const prefix = source.slice(arrayStart, elements[0].start);
+  const suffix = source.slice(elements[n - 1].end, arrayEnd);
+  const separators: string[] = [];
+  for (let i = 0; i < n - 1; i++) {
+    separators.push(source.slice(elements[i].end, elements[i + 1].start));
+  }
+  const elementText = elements.map((el) => source.slice(el.start, el.end));
+
+  const insertSep = chooseInsertSeparator(prefix, separators);
+
+  const newElements: string[] = [];
+  const newSeparators: string[] = [];
+  for (let i = 0; i < n; i++) {
+    newElements.push(elementText[i]);
+    if (i === index) {
+      newElements.push(elementText[i]);
+      newSeparators.push(insertSep);
+    }
+    if (i < n - 1) newSeparators.push(separators[i]);
+  }
+
+  let rebuilt = prefix + newElements[0];
+  for (let i = 1; i < newElements.length; i++) {
+    rebuilt += newSeparators[i - 1] + newElements[i];
+  }
+  rebuilt += suffix;
+
+  return source.slice(0, arrayStart) + rebuilt + source.slice(arrayEnd);
+}
+
 export function validateIcon(v: unknown): FolderIcon | null {
   if (!v || typeof v !== 'object') return null;
   const icon = v as { type?: unknown; value?: unknown };
@@ -430,6 +535,45 @@ export function filesPlugin(opts: FilesPluginOptions): Plugin {
               await fs.writeFile(entry, updated, 'utf8');
             }
             return json(res, 200, { ok: true, slideId, order });
+          }
+
+          const pageOpMatch = url.pathname.match(/^\/([^/]+)\/pages\/(\d+)(?:\/([a-z]+))?$/);
+          if (pageOpMatch) {
+            const slideId = pageOpMatch[1];
+            const pageIndex = Number.parseInt(pageOpMatch[2], 10);
+            const op = pageOpMatch[3];
+            if (!SLIDE_ID_RE.test(slideId)) return json(res, 400, { error: 'invalid slideId' });
+            if (!Number.isInteger(pageIndex) || pageIndex < 0)
+              return json(res, 400, { error: 'invalid page index' });
+
+            const isDelete = method === 'DELETE' && !op;
+            const isDuplicate = method === 'POST' && op === 'duplicate';
+            if (!isDelete && !isDuplicate) return next();
+
+            const entry = resolveSlideEntry(slidesRoot, slideId);
+            if (!entry) return json(res, 400, { error: 'invalid slideId' });
+
+            let source: string;
+            try {
+              source = await fs.readFile(entry, 'utf8');
+            } catch {
+              return json(res, 404, { error: 'slide not found' });
+            }
+
+            const updated = isDelete
+              ? removePageFromDefaultExportInSource(source, pageIndex)
+              : duplicatePageInDefaultExportInSource(source, pageIndex);
+            if (updated === null) {
+              return json(res, 422, {
+                error: isDelete
+                  ? 'could not delete page — index out of range or default export is not an array'
+                  : 'could not duplicate page — index out of range or default export is not an array',
+              });
+            }
+            if (updated !== source) {
+              await fs.writeFile(entry, updated, 'utf8');
+            }
+            return json(res, 200, { ok: true, slideId, index: pageIndex });
           }
 
           const idMatch = url.pathname.match(/^\/([^/]+)$/);

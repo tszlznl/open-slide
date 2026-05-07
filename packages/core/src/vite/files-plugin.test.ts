@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  duplicatePageInDefaultExportInSource,
   mimeForFilename,
+  removePageFromDefaultExportInSource,
   reorderDefaultExportPagesInSource,
   updateMetaTitleInSource,
   validateAssetName,
@@ -191,6 +193,112 @@ export default [A, B, C];
     expect(out).toContain('const A = () => null;');
     expect(out).toContain('const B = () => null;');
     expect(out).toContain('const C = () => null;');
+  });
+});
+
+describe('removePageFromDefaultExportInSource', () => {
+  const multiline = `import type { Page } from '@open-slide/core';
+const A = () => null;
+const B = () => null;
+const C = () => null;
+export default [
+  A,
+  B,
+  C,
+] satisfies Page[];
+`;
+
+  const inline = `const A = () => null;
+const B = () => null;
+const C = () => null;
+export default [A, B, C];
+`;
+
+  it('removes the first element', () => {
+    const out = removePageFromDefaultExportInSource(multiline, 0);
+    expect(out).not.toBeNull();
+    expect(out).toContain('export default [\n  B,\n  C,\n] satisfies Page[];');
+  });
+
+  it('removes a middle element', () => {
+    const out = removePageFromDefaultExportInSource(multiline, 1);
+    expect(out).not.toBeNull();
+    expect(out).toContain('export default [\n  A,\n  C,\n] satisfies Page[];');
+  });
+
+  it('removes the last element', () => {
+    const out = removePageFromDefaultExportInSource(multiline, 2);
+    expect(out).not.toBeNull();
+    expect(out).toContain('export default [\n  A,\n  B,\n] satisfies Page[];');
+  });
+
+  it('handles inline arrays', () => {
+    expect(removePageFromDefaultExportInSource(inline, 1)).toContain('export default [A, C];');
+  });
+
+  it('collapses to an empty array when removing the only element', () => {
+    const single = `const A = () => null;\nexport default [A];\n`;
+    const out = removePageFromDefaultExportInSource(single, 0);
+    expect(out).toContain('export default [];');
+  });
+
+  it('returns null on out-of-range indices', () => {
+    expect(removePageFromDefaultExportInSource(multiline, -1)).toBeNull();
+    expect(removePageFromDefaultExportInSource(multiline, 3)).toBeNull();
+  });
+
+  it('returns null when the default export is not an array', () => {
+    expect(removePageFromDefaultExportInSource(`export default A;\n`, 0)).toBeNull();
+  });
+});
+
+describe('duplicatePageInDefaultExportInSource', () => {
+  const multiline = `import type { Page } from '@open-slide/core';
+const A = () => null;
+const B = () => null;
+const C = () => null;
+export default [
+  A,
+  B,
+  C,
+] satisfies Page[];
+`;
+
+  const inline = `const A = () => null;\nconst B = () => null;\nexport default [A, B];\n`;
+
+  it('duplicates a middle element after itself', () => {
+    const out = duplicatePageInDefaultExportInSource(multiline, 1);
+    expect(out).not.toBeNull();
+    expect(out).toContain('export default [\n  A,\n  B,\n  B,\n  C,\n] satisfies Page[];');
+  });
+
+  it('duplicates the first element', () => {
+    const out = duplicatePageInDefaultExportInSource(multiline, 0);
+    expect(out).toContain('export default [\n  A,\n  A,\n  B,\n  C,\n] satisfies Page[];');
+  });
+
+  it('duplicates the last element', () => {
+    const out = duplicatePageInDefaultExportInSource(multiline, 2);
+    expect(out).toContain('export default [\n  A,\n  B,\n  C,\n  C,\n] satisfies Page[];');
+  });
+
+  it('handles inline arrays', () => {
+    expect(duplicatePageInDefaultExportInSource(inline, 0)).toContain('export default [A, A, B];');
+  });
+
+  it('duplicates the only element in a single-element array', () => {
+    const single = `const A = () => null;\nexport default [A];\n`;
+    const out = duplicatePageInDefaultExportInSource(single, 0);
+    expect(out).toContain('export default [A, A];');
+  });
+
+  it('returns null on out-of-range indices', () => {
+    expect(duplicatePageInDefaultExportInSource(multiline, -1)).toBeNull();
+    expect(duplicatePageInDefaultExportInSource(multiline, 3)).toBeNull();
+  });
+
+  it('returns null when the default export is not an array', () => {
+    expect(duplicatePageInDefaultExportInSource(`export default A;\n`, 0)).toBeNull();
   });
 });
 

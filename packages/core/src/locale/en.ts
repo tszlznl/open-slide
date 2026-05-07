@@ -288,6 +288,16 @@ export const en: Locale = {
   thumbnailRail: {
     pages: 'Pages',
     goToPageAria: 'Go to page {n}',
+    duplicatePage: 'Duplicate',
+    deletePage: 'Delete',
+    skipPage: 'Skip during play',
+    unskipPage: 'Include during play',
+    skippedBadge: 'Skipped',
+    pageActionsAria: 'Page {n} actions',
+    toastDuplicated: 'Duplicated page {n}',
+    toastDeleted: 'Deleted page {n}',
+    toastDuplicateFailed: 'Could not duplicate page',
+    toastDeleteFailed: 'Could not delete page',
   },
 
   pdfToast: {
