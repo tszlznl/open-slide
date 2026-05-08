@@ -292,6 +292,13 @@ export const ja: Locale = {
   thumbnailRail: {
     pages: 'ページ',
     goToPageAria: 'ページ {n} へ移動',
+    duplicatePage: '複製',
+    deletePage: '削除',
+    pageActionsAria: 'ページ {n} の操作',
+    toastDuplicated: 'ページ {n} を複製しました',
+    toastDeleted: 'ページ {n} を削除しました',
+    toastDuplicateFailed: 'ページを複製できませんでした',
+    toastDeleteFailed: 'ページを削除できませんでした',
   },
 
   pdfToast: {

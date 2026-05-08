@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useFolders } from '@/lib/folders';
-import { useLocale } from '@/lib/use-locale';
+import { format, useLocale } from '@/lib/use-locale';
 import { useWheelPageNavigation } from '@/lib/use-wheel-page-navigation';
 import { cn } from '@/lib/utils';
 import { ClickNavZones } from '../components/click-nav-zones';
@@ -33,7 +33,7 @@ import { NotesDrawer } from '../components/notes-drawer';
 import { PdfProgressToast } from '../components/pdf-progress-toast';
 import { Player } from '../components/player';
 import { SlideCanvas } from '../components/slide-canvas';
-import { ThumbnailRail } from '../components/thumbnail-rail';
+import { type ThumbnailActions, ThumbnailRail } from '../components/thumbnail-rail';
 import { exportSlideAsHtml } from '../lib/export-html';
 import { exportSlideAsPdf } from '../lib/export-pdf';
 import type { SlideModule } from '../lib/sdk';
@@ -79,6 +79,21 @@ export function Slide() {
   const index = Number.isFinite(rawIndex) ? Math.max(0, Math.min(pageCount - 1, rawIndex)) : 0;
   const view = searchParams.get('view') === 'assets' ? 'assets' : 'slides';
 
+  const goTo = useCallback(
+    (i: number) => {
+      const clamped = Math.max(0, Math.min(pageCount - 1, i));
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set('p', String(clamped + 1));
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [pageCount, setSearchParams],
+  );
+
   const reorderPage = useCallback(
     async (from: number, to: number) => {
       if (from === to) return;
@@ -97,16 +112,7 @@ export function Slide() {
       if (index === from) nextIndex = to;
       else if (from < index && to >= index) nextIndex = index - 1;
       else if (from > index && to <= index) nextIndex = index + 1;
-      if (nextIndex !== index) {
-        setSearchParams(
-          (prev) => {
-            const params = new URLSearchParams(prev);
-            params.set('p', String(nextIndex + 1));
-            return params;
-          },
-          { replace: true },
-        );
-      }
+      if (nextIndex !== index) goTo(nextIndex);
 
       try {
         const res = await fetch(`/__slides/${encodeURIComponent(slideId)}/reorder`, {
@@ -123,22 +129,76 @@ export function Slide() {
         toast.error(`Reorder failed: ${String((err as Error).message ?? err)}`);
       }
     },
-    [pages, index, slideId, setSearchParams],
+    [pages, index, slideId, goTo],
   );
 
-  const goTo = useCallback(
-    (i: number) => {
-      const clamped = Math.max(0, Math.min(pageCount - 1, i));
-      setSearchParams(
-        (prev) => {
-          const next = new URLSearchParams(prev);
-          next.set('p', String(clamped + 1));
-          return next;
-        },
-        { replace: true },
-      );
+  const duplicatePage = useCallback(
+    async (i: number) => {
+      const before = pages;
+      if (i < 0 || i >= before.length) return;
+      const nextPages = [...before];
+      nextPages.splice(i + 1, 0, before[i]);
+      setPages(nextPages);
+      if (index > i) goTo(index + 1);
+
+      try {
+        const res = await fetch(`/__slides/${encodeURIComponent(slideId)}/pages/${i}/duplicate`, {
+          method: 'POST',
+        });
+        if (!res.ok) {
+          const detail = await res.json().catch(() => ({ error: res.statusText }));
+          throw new Error(detail.error ?? `HTTP ${res.status}`);
+        }
+        toast.success(format(t.thumbnailRail.toastDuplicated, { n: i + 1 }));
+      } catch (err) {
+        setPages(before);
+        toast.error(
+          `${t.thumbnailRail.toastDuplicateFailed}: ${String((err as Error).message ?? err)}`,
+        );
+      }
     },
-    [pageCount, setSearchParams],
+    [pages, index, slideId, goTo, t.thumbnailRail],
+  );
+
+  const deletePage = useCallback(
+    async (i: number) => {
+      const before = pages;
+      if (i < 0 || i >= before.length || before.length <= 1) return;
+      const nextPages = before.slice(0, i).concat(before.slice(i + 1));
+      setPages(nextPages);
+      if (index >= i && index > 0) {
+        const target = index === i ? Math.min(index, nextPages.length - 1) : index - 1;
+        goTo(target);
+      }
+
+      try {
+        const res = await fetch(`/__slides/${encodeURIComponent(slideId)}/pages/${i}`, {
+          method: 'DELETE',
+        });
+        if (!res.ok) {
+          const detail = await res.json().catch(() => ({ error: res.statusText }));
+          throw new Error(detail.error ?? `HTTP ${res.status}`);
+        }
+        toast.success(format(t.thumbnailRail.toastDeleted, { n: i + 1 }));
+      } catch (err) {
+        setPages(before);
+        toast.error(
+          `${t.thumbnailRail.toastDeleteFailed}: ${String((err as Error).message ?? err)}`,
+        );
+      }
+    },
+    [pages, index, slideId, goTo, t.thumbnailRail],
+  );
+
+  const thumbnailActions = useMemo<ThumbnailActions | undefined>(
+    () =>
+      import.meta.env.DEV
+        ? {
+            onDuplicate: duplicatePage,
+            onDelete: deletePage,
+          }
+        : undefined,
+    [duplicatePage, deletePage],
   );
 
   useEffect(() => {
@@ -410,6 +470,7 @@ export function Slide() {
                       current={index}
                       onSelect={goTo}
                       onReorder={import.meta.env.DEV ? reorderPage : undefined}
+                      actions={thumbnailActions}
                     />
                   </div>
                   <main
@@ -449,6 +510,7 @@ export function Slide() {
                       current={index}
                       onSelect={goTo}
                       orientation="horizontal"
+                      actions={thumbnailActions}
                     />
                   </div>
                   <InspectorPanel />

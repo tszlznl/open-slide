@@ -288,6 +288,13 @@ export const zhTW: Locale = {
   thumbnailRail: {
     pages: '頁面',
     goToPageAria: '前往第 {n} 頁',
+    duplicatePage: '複製',
+    deletePage: '刪除',
+    pageActionsAria: '第 {n} 頁的操作',
+    toastDuplicated: '已複製第 {n} 頁',
+    toastDeleted: '已刪除第 {n} 頁',
+    toastDuplicateFailed: '無法複製頁面',
+    toastDeleteFailed: '無法刪除頁面',
   },
 
   pdfToast: {

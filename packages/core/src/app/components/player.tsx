@@ -61,6 +61,9 @@ export function Player({
   const [keyboardDriven, setKeyboardDriven] = useState(false);
   const [startedAt] = useState(() => Date.now());
 
+  const canPrev = index > 0;
+  const canNext = index < pages.length - 1;
+
   const goPrev = useCallback(() => {
     if (index > 0) onIndexChange(index - 1);
   }, [index, onIndexChange]);
@@ -73,8 +76,8 @@ export function Player({
   useWheelPageNavigation({
     ref: rootRef,
     enabled: !overlayActive,
-    canPrev: index > 0,
-    canNext: index < pages.length - 1,
+    canPrev,
+    canNext,
     onPrev: goPrev,
     onNext: goNext,
   });
@@ -280,14 +283,14 @@ export function Player({
         type="button"
         aria-label="Previous page"
         onClick={goPrev}
-        disabled={index === 0}
+        disabled={!canPrev}
         className="absolute inset-y-0 left-0 z-10 w-[30%]"
       />
       <button
         type="button"
         aria-label="Next page"
         onClick={goNext}
-        disabled={index === pages.length - 1}
+        disabled={!canNext}
         className="absolute inset-y-0 right-0 z-10 w-[30%]"
       />
 

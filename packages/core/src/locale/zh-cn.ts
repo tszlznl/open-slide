@@ -288,6 +288,13 @@ export const zhCN: Locale = {
   thumbnailRail: {
     pages: '页面',
     goToPageAria: '前往第 {n} 页',
+    duplicatePage: '复制',
+    deletePage: '删除',
+    pageActionsAria: '第 {n} 页的操作',
+    toastDuplicated: '已复制第 {n} 页',
+    toastDeleted: '已删除第 {n} 页',
+    toastDuplicateFailed: '无法复制页面',
+    toastDeleteFailed: '无法删除页面',
   },
 
   pdfToast: {

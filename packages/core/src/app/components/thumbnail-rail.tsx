@@ -2,6 +2,7 @@ import {
   closestCenter,
   DndContext,
   type DragEndEvent,
+  type DragStartEvent,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -14,7 +15,15 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useEffect, useRef } from 'react';
+import { Copy, Trash2 } from 'lucide-react';
+import { Fragment, useEffect, useRef } from 'react';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { format, useLocale } from '@/lib/use-locale';
 import { cn } from '@/lib/utils';
@@ -25,12 +34,18 @@ import { SlideCanvas } from './slide-canvas';
 
 type Orientation = 'vertical' | 'horizontal';
 
+export type ThumbnailActions = {
+  onDuplicate: (index: number) => void;
+  onDelete: (index: number) => void;
+};
+
 type Props = {
   pages: Page[];
   design?: DesignSystem;
   current: number;
   onSelect: (index: number) => void;
   onReorder?: (from: number, to: number) => void;
+  actions?: ThumbnailActions;
   orientation?: Orientation;
 };
 
@@ -43,6 +58,7 @@ export function ThumbnailRail({
   current,
   onSelect,
   onReorder,
+  actions,
   orientation = 'vertical',
 }: Props) {
   const activeRef = useRef<HTMLButtonElement | null>(null);
@@ -68,7 +84,7 @@ export function ThumbnailRail({
           <div className="flex items-center gap-2 px-3 py-2.5">
             {pages.map((PageComp, i) => {
               const active = i === current;
-              return (
+              const button = (
                 <button
                   // biome-ignore lint/suspicious/noArrayIndexKey: pages list is render-stable
                   key={i}
@@ -102,6 +118,19 @@ export function ThumbnailRail({
                   </div>
                 </button>
               );
+              if (!actions) return button;
+              return (
+                <ThumbContextMenu
+                  // biome-ignore lint/suspicious/noArrayIndexKey: pages list is render-stable
+                  key={i}
+                  index={i}
+                  actions={actions}
+                  pageCount={pages.length}
+                  ariaLabel={format(t.thumbnailRail.pageActionsAria, { n: i + 1 })}
+                >
+                  {button}
+                </ThumbContextMenu>
+              );
             })}
           </div>
         </div>
@@ -125,24 +154,18 @@ export function ThumbnailRail({
       />
     );
 
-    if (onReorder) {
-      return (
-        <SortableThumb
-          key={i}
-          index={i}
-          active={active}
-          activeRef={active ? activeRef : undefined}
-          onSelect={() => onSelect(i)}
-          ariaLabel={format(t.thumbnailRail.goToPageAria, { n: i + 1 })}
-        >
-          {inner}
-        </SortableThumb>
-      );
-    }
-
-    return (
+    const node = onReorder ? (
+      <SortableThumb
+        index={i}
+        active={active}
+        activeRef={active ? activeRef : undefined}
+        onSelect={() => onSelect(i)}
+        ariaLabel={format(t.thumbnailRail.goToPageAria, { n: i + 1 })}
+      >
+        {inner}
+      </SortableThumb>
+    ) : (
       <button
-        key={i}
         type="button"
         ref={active ? activeRef : undefined}
         onClick={() => onSelect(i)}
@@ -152,6 +175,21 @@ export function ThumbnailRail({
       >
         {inner}
       </button>
+    );
+
+    if (!actions) {
+      return <Fragment key={i}>{node}</Fragment>;
+    }
+    return (
+      <ThumbContextMenu
+        key={i}
+        index={i}
+        actions={actions}
+        pageCount={pages.length}
+        ariaLabel={format(t.thumbnailRail.pageActionsAria, { n: i + 1 })}
+      >
+        {node}
+      </ThumbContextMenu>
     );
   };
 
@@ -171,7 +209,7 @@ export function ThumbnailRail({
 
   return (
     <ScrollArea className="h-full border-r border-hairline bg-sidebar">
-      <SortableRail pages={pages} onReorder={onReorder}>
+      <SortableRail pages={pages} onReorder={onReorder} onSelect={onSelect}>
         {list}
       </SortableRail>
     </ScrollArea>
@@ -234,13 +272,56 @@ function ThumbContents({
   );
 }
 
+function ThumbContextMenu({
+  index,
+  actions,
+  pageCount,
+  ariaLabel,
+  children,
+}: {
+  index: number;
+  actions: ThumbnailActions;
+  pageCount: number;
+  ariaLabel: string;
+  children: React.ReactNode;
+}) {
+  const t = useLocale();
+  const canDelete = pageCount > 1;
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild aria-label={ariaLabel}>
+        {children}
+      </ContextMenuTrigger>
+      <ContextMenuContent className="min-w-[180px]">
+        <ContextMenuItem onSelect={() => actions.onDuplicate(index)}>
+          <Copy />
+          {t.thumbnailRail.duplicatePage}
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem
+          variant="destructive"
+          disabled={!canDelete}
+          onSelect={() => {
+            if (canDelete) actions.onDelete(index);
+          }}
+        >
+          <Trash2 />
+          {t.thumbnailRail.deletePage}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+
 function SortableRail({
   pages,
   onReorder,
+  onSelect,
   children,
 }: {
   pages: Page[];
   onReorder: (from: number, to: number) => void;
+  onSelect: (index: number) => void;
   children: React.ReactNode;
 }) {
   const sensors = useSensors(
@@ -249,6 +330,11 @@ function SortableRail({
   );
 
   const items = pages.map((_, i) => i + 1);
+
+  const handleDragStart = (event: DragStartEvent) => {
+    const i = (event.active.id as number) - 1;
+    if (i >= 0) onSelect(i);
+  };
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -260,7 +346,12 @@ function SortableRail({
   };
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
       <SortableContext items={items} strategy={verticalListSortingStrategy}>
         {children}
       </SortableContext>
@@ -275,6 +366,7 @@ function SortableThumb({
   onSelect,
   ariaLabel,
   children,
+  ...rest
 }: {
   index: number;
   active: boolean;
@@ -282,7 +374,10 @@ function SortableThumb({
   onSelect: () => void;
   ariaLabel: string;
   children: React.ReactNode;
-}) {
+} & Omit<
+  React.ButtonHTMLAttributes<HTMLButtonElement>,
+  'onClick' | 'aria-label' | 'aria-current' | 'type' | 'style' | 'className' | 'ref' | 'children'
+>) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: index + 1,
   });
@@ -296,6 +391,7 @@ function SortableThumb({
 
   return (
     <button
+      {...rest}
       ref={setRef}
       type="button"
       onClick={onSelect}
@@ -308,8 +404,7 @@ function SortableThumb({
       }}
       className={cn(
         thumbButtonClass(active),
-        'cursor-grab active:cursor-grabbing',
-        isDragging && 'z-10 opacity-60 shadow-edge ring-1 ring-brand',
+        isDragging && 'z-10 cursor-grabbing opacity-60 shadow-edge ring-1 ring-brand',
       )}
       {...attributes}
       {...listeners}
