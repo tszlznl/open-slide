@@ -378,6 +378,7 @@ function SortableThumb({
 
   return (
     <button
+      {...rest}
       ref={setRef}
       type="button"
       onClick={onSelect}
@@ -393,7 +394,6 @@ function SortableThumb({
         isDragging && 'z-10 cursor-grabbing opacity-60 shadow-edge ring-1 ring-brand',
       )}
       {...attributes}
-      {...rest}
       {...listeners}
     >
       {children}
