@@ -5,6 +5,7 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import type { InlineConfig } from 'vite';
 import { commentsPlugin } from './comments-plugin.ts';
+import { currentPlugin } from './current-plugin.ts';
 import { designPlugin } from './design-plugin.ts';
 import { filesPlugin } from './files-plugin.ts';
 import { locTagsPlugin } from './loc-tags-plugin.ts';
@@ -48,6 +49,7 @@ export async function createViteConfig(opts: CreateViteConfigOptions): Promise<I
       commentsPlugin({ userCwd, slidesDir }),
       notesPlugin({ userCwd, slidesDir }),
       filesPlugin({ userCwd, slidesDir }),
+      currentPlugin({ userCwd, slidesDir }),
     ],
     resolve: {
       alias: {

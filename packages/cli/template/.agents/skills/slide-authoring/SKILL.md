@@ -9,6 +9,7 @@ This skill is the **technical reference** for everything that happens inside `sl
 
 - `create-slide` owns "draft a new deck" — it asks the user scoping questions, then delegates the *how* to this skill.
 - `apply-comments` owns "process inspector markers" — it finds markers and applies edits, but the edits themselves follow the rules here.
+- `current-slide` resolves deictic references ("this page", "the slide I'm on") to a concrete `slideId` + `pageIndex`. Consult it **first** when the user references the current slide without naming it, then come back here for how to edit it.
 - Any ad-hoc slide edit (manual tweak, one-off fix) should also consult this skill before touching the file.
 
 When any of those paths reach the point of *writing React code for a page*, this is the source of truth. Do not duplicate the knowledge below into other skills — link here instead.
@@ -19,7 +20,7 @@ When any of those paths reach the point of *writing React code for a page*, this
 - Entry is `slides/<id>/index.tsx`. Images/videos/fonts go under `slides/<id>/assets/`.
 - Do **not** touch `package.json`, `open-slide.config.ts`, or other slides.
 - Do not add dependencies. Only `react` and standard web APIs are available.
-- Do not create `README.md` or other prose files inside the slide folder — just `index.tsx` + `assets/`.
+- A slide is **one `index.tsx` plus `assets/`** — nothing else. Do not create sibling `.tsx`/`.ts` files (`Card.tsx`, `components/`, `helpers.ts`, etc.); helper components and constants go inside `index.tsx`. Do not create `README.md` or other prose files either.
 
 ## File contract
 
@@ -264,6 +265,50 @@ The user uploads the real file via the Assets panel, then clicks the placeholder
 
 Size the placeholder to the slot it occupies. Pass `width`/`height` when the layout has a fixed image box; omit them when the placeholder fills a flex/grid cell. The `hint` should describe the *content* the user needs ("Q3 revenue chart") not the *role* ("hero image").
 
+## Repeated elements: component, not `map`
+
+When a page has visually repeated items — cards, logo rows, gallery tiles, list rows, step indicators — **define a small component and instantiate it once per item**. Do **not** render the group with `array.map` over a data array.
+
+Define the component **in the same `index.tsx`**, alongside the `Page` components. Never split it into a sibling file like `Card.tsx` — a slide is always a single `index.tsx` plus its `assets/`.
+
+```tsx
+// ✅ Each card is its own JSX node — inspector edits one at a time.
+const Card = ({ src, label }: { src: string; label: string }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <img src={src} style={{ width: 320, height: 320, objectFit: 'cover', borderRadius: 12 }} />
+    <p style={{ fontSize: 32 }}>{label}</p>
+  </div>
+);
+
+<div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 64 }}>
+  <Card src={alpha} label="Alpha" />
+  <Card src={beta}  label="Beta"  />
+  <Card src={gamma} label="Gamma" />
+</div>
+```
+
+```tsx
+// ❌ One shared template — replacing the image or text in the inspector
+//    changes every rendered card at once.
+const items = [
+  { src: alpha, label: 'Alpha' },
+  { src: beta,  label: 'Beta'  },
+  { src: gamma, label: 'Gamma' },
+];
+items.map((item) => (
+  <div>
+    <img src={item.src} />
+    <p>{item.label}</p>
+  </div>
+));
+```
+
+The inspector edits source JSX in place. A `map` body is **one source location** shared by every rendered instance, so when the user replaces an image or tweaks a label there, every card mutates together. Explicit instances give each card its own JSX node and its own props — the unit the inspector can target.
+
+The component definition stays the single source of truth for layout/styling (change it once → all cards update). Only the per-instance data — `src`, `label`, accent color — lives at the call site.
+
+This applies whenever the *visual element* repeats, not whenever the *data* does. Pure-text lists (`<ul><li>` bullets) are fine: each `<li>` is already its own JSX node, so plain literal markup is the correct shape — no need to wrap them in a component.
+
 ## Runtime behavior you get for free
 
 - Home page lists every folder under `slides/`.
@@ -282,6 +327,7 @@ Size the placeholder to the slot it occupies. Pass `width`/`height` when the lay
 - [ ] One coherent visual direction across every page (palette + type scale).
 - [ ] Slide declares a top-level `export const design: DesignSystem = { … }` and references the values via `var(--osd-X)` (use `design.X` only when you need a JS number for arithmetic). Only omit the `design` const for a one-off slide whose palette is intentionally locked.
 - [ ] One idea per page.
+- [ ] Visually repeated elements (cards, tiles, logo rows) are rendered as explicit `<Component />` instances, not via `array.map` over a data list.
 - [ ] All imported assets exist on disk under `slides/<id>/assets/`.
 - [ ] Every `<ImagePlaceholder>` corresponds to a real image the user must supply — not decorative filler. If it could be replaced by typography or layout, it should be.
 - [ ] Nothing outside `slides/<id>/` was edited.
@@ -302,3 +348,4 @@ Size the placeholder to the slot it occupies. Pass `width`/`height` when the lay
 - ❌ Editing `package.json`, `open-slide.config.ts`, or other slides.
 - ❌ Sprinkling `<ImagePlaceholder>` across pages "for visual interest". Placeholders are for content the user owns; they're not stock-photo slots.
 - ❌ Using a placeholder for an icon or decorative shape — those are typography/SVG problems, not asset problems.
+- ❌ Rendering visually repeated elements with `array.map(...)` over a data array. Define a component and instantiate it explicitly per item (`<Card />`, `<Card />`, `<Card />`) so the inspector can edit each independently — a shared `map` body mutates every instance at once.

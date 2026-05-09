@@ -9,6 +9,7 @@ This skill is the **technical reference** for everything that happens inside `sl
 
 - `create-slide` owns "draft a new deck" — it asks the user scoping questions, then delegates the *how* to this skill.
 - `apply-comments` owns "process inspector markers" — it finds markers and applies edits, but the edits themselves follow the rules here.
+- `current-slide` resolves deictic references ("this page", "the slide I'm on") to a concrete `slideId` + `pageIndex`. Consult it **first** when the user references the current slide without naming it, then come back here for how to edit it.
 - Any ad-hoc slide edit (manual tweak, one-off fix) should also consult this skill before touching the file.
 
 When any of those paths reach the point of *writing React code for a page*, this is the source of truth. Do not duplicate the knowledge below into other skills — link here instead.

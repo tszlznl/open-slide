@@ -79,6 +79,18 @@ export function Slide() {
   const index = Number.isFinite(rawIndex) ? Math.max(0, Math.min(pageCount - 1, rawIndex)) : 0;
   const view = searchParams.get('view') === 'assets' ? 'assets' : 'slides';
 
+  useEffect(() => {
+    if (!import.meta.hot) return;
+    if (!slideId || !slide || pageCount === 0) return;
+    import.meta.hot.send('open-slide:current', {
+      slideId,
+      pageIndex: index,
+      totalPages: pageCount,
+      slideTitle: slide.meta?.title ?? slideId,
+      view,
+    });
+  }, [slideId, index, pageCount, slide, view]);
+
   const goTo = useCallback(
     (i: number) => {
       const clamped = Math.max(0, Math.min(pageCount - 1, i));
