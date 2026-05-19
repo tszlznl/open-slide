@@ -43,11 +43,10 @@ export async function isDirNonEmpty(target: string): Promise<boolean> {
   return entries.some((e) => !e.startsWith('.'));
 }
 
-async function readCliVersion(): Promise<string> {
-  const pkg = JSON.parse(await readFile(resolve(HERE, '..', 'package.json'), 'utf8')) as {
-    version: string;
-  };
-  return pkg.version;
+declare const __CORE_VERSION_AT_BUILD__: string;
+
+function coreVersionRange(): string {
+  return `^${__CORE_VERSION_AT_BUILD__}`;
 }
 
 async function linkOrCopy(relSrc: string, dst: string): Promise<void> {
@@ -144,7 +143,7 @@ export async function init(opts: InitOptions): Promise<void> {
     pkg.version = '0.0.0';
     pkg.private = true;
     if (pkg.dependencies?.['@open-slide/core']) {
-      pkg.dependencies['@open-slide/core'] = `^${await readCliVersion()}`;
+      pkg.dependencies['@open-slide/core'] = coreVersionRange();
     }
     await writeFile(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
   }
